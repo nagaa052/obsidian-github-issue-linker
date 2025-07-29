@@ -5,9 +5,12 @@ GitHub CLIを使用してGitHub IssueのURLを自動的にタイトル付きMark
 ## 機能
 
 - **自動URL変換**: GitHub Issue URLをペーストするだけで、自動的にIssueタイトル付きのMarkdownリンクに変換
+- **クロスプラットフォーム対応**: macOS、Windows、Linuxでの自動GitHub CLI検出
+- **柔軟なパス解決**: 多段階フォールバック戦略による堅牢なGitHub CLI検出
 - **インテリジェントキャッシュ**: パフォーマンス向上とAPI呼び出し削減のためのタイトルキャッシュ機能
 - **堅牢なエラーハンドリング**: タイトル取得に失敗した場合の元URLへのグレースフルフォールバック
-- **設定可能なオプション**: キャッシュ期間、サイズ、通知設定のカスタマイズ
+- **設定可能なオプション**: キャッシュ期間、サイズ、通知設定、GitHub CLIパスのカスタマイズ
+- **ユーザーフレンドリーUI**: 自動検出、テスト機能、インストールガイダンス付き設定画面
 - **ネイティブ統合**: Obsidianの組み込みペースト処理を使用したシームレスな体験
 
 ## 前提条件
@@ -66,6 +69,10 @@ GitHub CLIを使用してGitHub IssueのURLを自動的にタイトル付きMark
 ### 利用可能な設定
 
 - **プラグインを有効化**: プラグインのオン/オフ切り替え
+- **GitHub CLIパス**: GitHub CLI実行ファイルのカスタムパス設定
+  - **Auto-detect**: 自動検出ボタンでシステム内のGitHub CLIを検索
+  - **Test**: 現在の設定パスの動作確認
+  - **インストールガイド**: GitHub CLIインストール手順の表示
 - **キャッシュTTL（分）**: Issueタイトルをキャッシュする期間（デフォルト: 60分）
 - **キャッシュサイズ**: キャッシュするタイトルの最大数（デフォルト: 100）
 - **通知を表示**: 処理と結果の通知を表示（デフォルト: 有効）
@@ -79,6 +86,7 @@ GitHub CLIを使用してGitHub IssueのURLを自動的にタイトル付きMark
 
 - **メインプラグインクラス**: Obsidianライフサイクルとペーストイベントの処理
 - **GitHubService**: GitHub CLI連携とキャッシュ管理
+- **PathResolver**: クロスプラットフォームGitHub CLIパス解決とバリデーション
 - **設定管理**: バリデーション付きの設定可能オプション
 - **定数**: 一元化された設定とパターン
 
@@ -124,6 +132,7 @@ npm run build
 ├── src/
 │   ├── main.ts           # プラグインエントリーポイント
 │   ├── GitHubService.ts  # GitHub CLIサービス層
+│   ├── PathResolver.ts   # クロスプラットフォームパス解決
 │   ├── settings.ts       # 設定管理
 │   └── constants.ts      # 定数とパターン
 ├── main.ts               # esbuildエントリーポイント
@@ -145,6 +154,27 @@ npm run build
 1. **GitHub CLIの確認**: ターミナルで `gh --version` が動作することを確認
 2. **認証の確認**: `gh auth status` で認証状態を確認
 3. **コンソールの確認**: Developer Toolsを開いてエラーメッセージを確認
+
+### GitHub CLIが見つからない
+
+プラグインがGitHub CLIを見つけられない場合：
+
+1. **自動検出を使用**: 
+   - 設定画面の「GitHub CLI Path」セクションで「Auto-detect」ボタンをクリック
+   - システム内の一般的なインストール場所を自動検索
+
+2. **手動パス設定**:
+   - ターミナルで `which gh` (macOS/Linux) または `where gh` (Windows) を実行
+   - 出力されたパスを設定画面の「GitHub CLI Path」フィールドに入力
+   - 「Test」ボタンで動作確認
+
+3. **インストールパスの確認**:
+   - **macOS**: `/opt/homebrew/bin/gh` (Apple Silicon) または `/usr/local/bin/gh` (Intel)
+   - **Windows**: `C:\Program Files\GitHub CLI\gh.exe`
+   - **Linux**: `/usr/bin/gh` または `/usr/local/bin/gh`
+
+4. **GitHub CLIの再インストール**:
+   - 必要に応じて、設定画面の「ⓘ」ボタンからインストールガイドを確認
 
 ### URLが変換されない
 
