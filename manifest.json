@@ -1,0 +1,11 @@
+{
+  "id": "obsidian-github-issue-linker",
+  "name": "GitHub Issue Linker",
+  "version": "1.0.0",
+  "minAppVersion": "0.15.0",
+  "description": "Automatically converts GitHub Issue URLs to Markdown links with titles using gh CLI",
+  "author": "nagaa052",
+  "authorUrl": "https://github.com/nagaa052",
+  "fundingUrl": "",
+  "isDesktopOnly": true
+}
