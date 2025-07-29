@@ -1,13 +1,8 @@
 // URL patterns for GitHub resources
 export const GITHUB_ISSUE_REGEX = /^https?:\/\/github\.com\/[^\/]+\/[^\/]+\/issues\/\d+$/;
 
-// GitHub CLI commands
-export const GH_VERSION_COMMAND = 'gh --version';
-export const GH_ISSUE_TITLE_COMMAND = (url: string) => `gh issue view "${url}" --json title -q .title`;
-
 // Timeout settings (milliseconds)
 export const GH_COMMAND_TIMEOUT = 8000;
-export const GH_VERSION_CHECK_TIMEOUT = 5000;
 
 // Cache settings defaults
 export const DEFAULT_CACHE_TTL_MINUTES = 60;

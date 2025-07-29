@@ -1,6 +1,7 @@
 import { App, PluginSettingTab, Setting } from 'obsidian';
 import type GitHubIssueLinkPlugin from './main';
 import { DEFAULT_CACHE_TTL_MINUTES, DEFAULT_CACHE_SIZE } from './constants';
+import { PathResolver } from './PathResolver';
 
 export interface PluginSettings {
   enabled: boolean;
@@ -8,6 +9,7 @@ export interface PluginSettings {
   cacheSize: number;
   showNotifications: boolean;
   supportedResourceTypes: ('issues' | 'prs')[];
+  ghPath?: string; // Optional custom path to GitHub CLI executable
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -20,10 +22,12 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 
 export class SettingsTab extends PluginSettingTab {
   plugin: GitHubIssueLinkPlugin;
+  private pathResolver: PathResolver;
 
   constructor(app: App, plugin: GitHubIssueLinkPlugin) {
     super(app, plugin);
     this.plugin = plugin;
+    this.pathResolver = new PathResolver();
   }
 
   display(): void {
@@ -118,6 +122,89 @@ export class SettingsTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
 
+    // GitHub CLI Path setting
+    new Setting(containerEl)
+      .setName('GitHub CLI Path')
+      .setDesc('Custom path to GitHub CLI executable (leave empty for auto-detection)')
+      .addText(text => {
+        const input = text
+          .setPlaceholder('Auto-detect (recommended)')
+          .setValue(this.plugin.settings.ghPath || '')
+          .onChange(async (value) => {
+            // Clear previous validation state
+            statusEl.textContent = '';
+            statusEl.className = 'setting-item-description';
+            
+            // Update setting
+            this.plugin.settings.ghPath = value.trim() || undefined;
+            await this.plugin.saveSettings();
+            
+            // Validate the path
+            if (value.trim()) {
+              this.validateGhPath(value.trim(), statusEl);
+            }
+          });
+
+        // Add validation status element
+        const statusEl = containerEl.createEl('div', { 
+          cls: 'setting-item-description',
+          text: ''
+        });
+
+        // Add buttons for auto-detect and validation
+        const buttonContainer = containerEl.createEl('div', {
+          cls: 'setting-item-control'
+        });
+        
+        // Auto-detect button
+        const autoDetectBtn = buttonContainer.createEl('button', {
+          text: 'Auto-detect',
+          cls: 'mod-cta'
+        });
+        autoDetectBtn.onclick = async () => {
+          statusEl.textContent = 'Detecting GitHub CLI...';
+          statusEl.className = 'setting-item-description';
+          
+          const result = await this.pathResolver.resolveGhPath();
+          if (result.success && result.path) {
+            input.setValue(result.path);
+            this.plugin.settings.ghPath = result.path;
+            await this.plugin.saveSettings();
+            statusEl.textContent = `✓ Found GitHub CLI at: ${result.path} (${result.method})`;
+            statusEl.style.color = 'var(--text-success)';
+          } else {
+            statusEl.textContent = `✗ ${result.error}`;
+            statusEl.style.color = 'var(--text-error)';
+          }
+        };
+        
+        // Test button
+        const testBtn = buttonContainer.createEl('button', {
+          text: 'Test'
+        });
+        testBtn.style.marginLeft = '8px';
+        testBtn.onclick = async () => {
+          const pathToTest = input.getValue().trim() || undefined;
+          await this.validateGhPath(pathToTest, statusEl);
+        };
+
+        return input;
+      })
+      .addExtraButton(button => {
+        button
+          .setIcon('info')
+          .setTooltip('GitHub CLI installation instructions')
+          .onClick(() => {
+            const instructions = this.pathResolver.getInstallationInstructions();
+            // Show instructions in a notice or modal
+            const modal = new (require('obsidian').Modal)(this.app);
+            modal.titleEl.setText('GitHub CLI Installation');
+            modal.contentEl.createEl('p', { text: instructions });
+            modal.contentEl.createEl('p', { text: 'After installation, restart Obsidian and use the "Auto-detect" button.' });
+            modal.open();
+          });
+      });
+
     // Supported resource types (for future extension)
     new Setting(containerEl)
       .setName('Supported resource types')
@@ -146,5 +233,47 @@ export class SettingsTab extends PluginSettingTab {
     containerEl.createEl('p', { 
       text: 'If the GitHub CLI is not available, the plugin will be automatically disabled.' 
     });
+  }
+
+  /**
+   * Validate GitHub CLI path and update status element
+   */
+  private async validateGhPath(pathToTest: string | undefined, statusEl: HTMLElement): Promise<void> {
+    statusEl.textContent = 'Validating GitHub CLI...';
+    statusEl.className = 'setting-item-description';
+    statusEl.style.color = '';
+    
+    try {
+      const result = await this.pathResolver.resolveGhPath(pathToTest);
+      
+      if (result.success && result.path) {
+        statusEl.textContent = `✓ GitHub CLI is working: ${result.path}`;
+        statusEl.style.color = 'var(--text-success)';
+      } else {
+        statusEl.textContent = `✗ ${result.error}`;
+        statusEl.style.color = 'var(--text-error)';
+        
+        // Show installation instructions
+        const instructionsEl = statusEl.parentElement?.createEl('div', {
+          cls: 'setting-item-description'
+        });
+        
+        if (instructionsEl) {
+          instructionsEl.style.marginTop = '8px';
+          instructionsEl.style.padding = '8px';
+          instructionsEl.style.backgroundColor = 'var(--background-secondary)';
+          instructionsEl.style.borderRadius = '4px';
+        }
+        
+        if (instructionsEl) {
+          instructionsEl.createEl('strong', { text: 'Installation Instructions:' });
+          instructionsEl.createEl('br');
+          instructionsEl.createEl('span', { text: this.pathResolver.getInstallationInstructions() });
+        }
+      }
+    } catch (error) {
+      statusEl.textContent = `✗ Validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      statusEl.style.color = 'var(--text-error)';
+    }
   }
 }

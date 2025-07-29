@@ -83,8 +83,37 @@ export default class GitHubIssueLinkPlugin extends Plugin {
       return;
     }
 
-    // Prevent default paste behavior
+    // Try to prevent default paste behavior
     evt.preventDefault();
+    evt.stopPropagation();
+
+    // Process the URL conversion with a slight delay to handle paste timing issues
+    setTimeout(async () => {
+      await this.processUrlConversion(editor, clipboardData);
+    }, 10);
+  }
+
+  /**
+   * Process URL conversion to Markdown link
+   */
+  private async processUrlConversion(editor: any, url: string): Promise<void> {
+    // Get current cursor position and surrounding text
+    const currentPos = editor.getCursor();
+    const currentLine = editor.getLine(currentPos.line);
+    
+    // Check if the URL was already pasted (fallback handling)
+    let targetPos = currentPos;
+    if (currentLine.includes(url)) {
+      // Find the position of the URL in the current line
+      const urlIndex = currentLine.indexOf(url);
+      if (urlIndex >= 0) {
+        // Select the URL that was already pasted
+        const startPos = { line: currentPos.line, ch: urlIndex };
+        const endPos = { line: currentPos.line, ch: urlIndex + url.length };
+        editor.setSelection(startPos, endPos);
+        targetPos = startPos;
+      }
+    }
 
     // Show processing notice
     let processingNotice: Notice | null = null;
@@ -94,12 +123,12 @@ export default class GitHubIssueLinkPlugin extends Plugin {
 
     try {
       // Fetch issue title
-      const title = await this.githubService.fetchIssueTitle(clipboardData);
+      const title = await this.githubService.fetchIssueTitle(url);
       
       // Create markdown link
-      const markdownLink = `[${title}](${clipboardData})`;
+      const markdownLink = `[${title}](${url})`;
       
-      // Replace the selection with the markdown link
+      // Replace the selected text (either selection or the found URL) with the markdown link
       editor.replaceSelection(markdownLink);
       
       // Hide processing notice
@@ -125,8 +154,11 @@ export default class GitHubIssueLinkPlugin extends Plugin {
         new Notice(MESSAGES.FETCH_FAILED, NOTIFICATION_DURATION.ERROR);
       }
       
-      // Fallback: paste the original URL
-      editor.replaceSelection(clipboardData);
+      // Fallback: ensure the original URL is present
+      if (!currentLine.includes(url)) {
+        editor.setCursor(targetPos);
+        editor.replaceSelection(url);
+      }
       
       // Log the error for debugging
       if (error instanceof GitHubError) {
@@ -150,9 +182,15 @@ export default class GitHubIssueLinkPlugin extends Plugin {
   async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
     
-    // Update service settings reference
-    // Note: GitHubService receives settings by reference, so this is automatic
-    // But we could reinitialize if needed for more complex changes
+    // If GitHub service is initialized and plugin is enabled, refresh gh path
+    // This ensures that path changes are immediately reflected
+    if (this.githubService && this.settings.enabled) {
+      try {
+        await this.githubService.refreshGhPath();
+      } catch (error) {
+        console.warn('Failed to refresh GitHub CLI path after settings change:', error);
+      }
+    }
   }
 
   /**
