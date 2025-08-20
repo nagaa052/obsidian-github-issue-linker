@@ -3,7 +3,8 @@ import { promisify } from 'util';
 import type { PluginSettings } from './settings';
 import { PathResolver } from './PathResolver';
 import { 
-  GITHUB_ISSUE_REGEX, 
+  GITHUB_ISSUE_REGEX,
+  GITHUB_PR_REGEX,
   GH_COMMAND_TIMEOUT,
   MESSAGES
 } from './constants';
@@ -59,6 +60,20 @@ export class GitHubService {
    */
   isGitHubIssueUrl(url: string): boolean {
     return GITHUB_ISSUE_REGEX.test(url.trim());
+  }
+
+  /**
+   * Validate if a URL is a GitHub Pull Request URL
+   */
+  isGitHubPrUrl(url: string): boolean {
+    return GITHUB_PR_REGEX.test(url.trim());
+  }
+
+  /**
+   * Validate if a URL is a supported GitHub resource URL (Issue or PR)
+   */
+  isGitHubResourceUrl(url: string): boolean {
+    return this.isGitHubIssueUrl(url) || this.isGitHubPrUrl(url);
   }
 
   /**
@@ -150,6 +165,107 @@ export class GitHubService {
   }
 
   /**
+   * Fetch pull request title from GitHub using gh CLI
+   */
+  async fetchPrTitle(url: string): Promise<string> {
+    // Validate URL first
+    if (!this.isGitHubPrUrl(url)) {
+      throw new GitHubError('Invalid GitHub pull request URL format');
+    }
+
+    // Check cache first
+    const cached = this.getCachedTitle(url);
+    if (cached) {
+      return cached;
+    }
+
+    // Ensure we have a resolved gh path
+    if (!this.resolvedGhPath) {
+      const pathResult = await this.pathResolver.resolveGhPath(this.settings.ghPath);
+      if (!pathResult.success || !pathResult.path) {
+        throw new GitHubError(`GitHub CLI not available: ${pathResult.error}`);
+      }
+      this.resolvedGhPath = pathResult.path;
+    }
+
+    // Fetch from gh CLI
+    try {
+      const command = this.buildGhCommand(this.resolvedGhPath, url);
+      const { stdout } = await execAsync(command, { 
+        timeout: GH_COMMAND_TIMEOUT 
+      });
+      
+      const title = stdout.trim();
+      
+      if (!title) {
+        throw new GitHubError('Empty title received from GitHub CLI');
+      }
+
+      // Cache the result
+      this.cacheTitle(url, title);
+      
+      return title;
+    } catch (error: any) {
+      // If error is related to gh path, clear cached path and retry once
+      if (this.isPathRelatedError(error) && this.resolvedGhPath) {
+        console.warn('GitHub CLI path seems invalid, attempting to re-resolve...', error.message);
+        this.resolvedGhPath = null;
+        this.pathResolver.clearCache();
+        
+        // Retry once with fresh path resolution
+        const pathResult = await this.pathResolver.resolveGhPath(this.settings.ghPath);
+        if (pathResult.success && pathResult.path) {
+          this.resolvedGhPath = pathResult.path;
+          try {
+            const command = this.buildGhCommand(this.resolvedGhPath, url);
+            const { stdout } = await execAsync(command, { timeout: GH_COMMAND_TIMEOUT });
+            const title = stdout.trim();
+            
+            if (title) {
+              this.cacheTitle(url, title);
+              return title;
+            }
+          } catch (retryError) {
+            // Fall through to original error handling
+          }
+        }
+      }
+      
+      // Enhanced error handling based on common gh CLI errors
+      let errorMessage = MESSAGES.FETCH_ERROR_PREFIX;
+      
+      if (error.code === 'ETIMEDOUT') {
+        errorMessage += 'Request timed out';
+      } else if (error.code === 'ENOENT') {
+        errorMessage += 'GitHub CLI executable not found';
+      } else if (error.stderr?.includes('not found')) {
+        errorMessage += 'Pull request not found or repository is private';
+      } else if (error.stderr?.includes('authentication')) {
+        errorMessage += 'GitHub authentication required. Run "gh auth login"';
+      } else if (error.stderr?.includes('rate limit')) {
+        errorMessage += 'GitHub API rate limit exceeded. Please try again later';
+      } else {
+        errorMessage += error.message || 'Unknown error occurred';
+      }
+      
+      throw new GitHubError(errorMessage);
+    }
+  }
+
+  /**
+   * Fetch title from GitHub resource (Issue or PR) using gh CLI
+   */
+  async fetchTitle(url: string): Promise<string> {
+    if (this.isGitHubIssueUrl(url)) {
+      return this.fetchIssueTitle(url);
+    } else if (this.isGitHubPrUrl(url)) {
+      return this.fetchPrTitle(url);
+    } else {
+      throw new GitHubError('Invalid GitHub URL format');
+    }
+  }
+
+  /**
    * Get cached title if available and not expired
    */
   private getCachedTitle(url: string): string | null {
@@ -216,7 +332,15 @@ export class GitHubService {
   private buildGhCommand(ghPath: string, url: string): string {
     // Escape path if it contains spaces
     const escapedPath = ghPath.includes(' ') ? `"${ghPath}"` : ghPath;
-    return `${escapedPath} issue view "${url}" --json title -q .title`;
+    
+    // Determine the resource type and build appropriate command
+    if (this.isGitHubIssueUrl(url)) {
+      return `${escapedPath} issue view "${url}" --json title -q .title`;
+    } else if (this.isGitHubPrUrl(url)) {
+      return `${escapedPath} pr view "${url}" --json title -q .title`;
+    } else {
+      throw new GitHubError('Unsupported GitHub URL format');
+    }
   }
 
   /**

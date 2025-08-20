@@ -205,24 +205,31 @@ export class SettingsTab extends PluginSettingTab {
           });
       });
 
-    // Supported resource types (for future extension)
+    // Supported resource types
     new Setting(containerEl)
       .setName('Supported resource types')
-      .setDesc('Types of GitHub resources to convert to links (Issues are currently supported)')
+      .setDesc('Types of GitHub resources to convert to links')
       .addDropdown(dropdown => dropdown
         .addOption('issues', 'Issues only')
-        .setValue('issues')
+        .addOption('prs', 'Pull Requests only')
+        .addOption('both', 'Issues and Pull Requests')
+        .setValue(this.plugin.settings.supportedResourceTypes.includes('prs') ? 
+          (this.plugin.settings.supportedResourceTypes.includes('issues') ? 'both' : 'prs') : 'issues')
         .onChange(async (value) => {
-          // For now, only issues are supported
-          // This is prepared for future PR support
-          this.plugin.settings.supportedResourceTypes = [value as 'issues' | 'prs'];
+          if (value === 'issues') {
+            this.plugin.settings.supportedResourceTypes = ['issues'];
+          } else if (value === 'prs') {
+            this.plugin.settings.supportedResourceTypes = ['prs'];
+          } else {
+            this.plugin.settings.supportedResourceTypes = ['issues', 'prs'];
+          }
           await this.plugin.saveSettings();
         }));
 
     // Add usage instructions
     containerEl.createEl('h3', { text: 'Usage' });
     containerEl.createEl('p', { 
-      text: 'Simply paste a GitHub Issue URL into any Obsidian note, and it will be automatically converted to a Markdown link with the issue title.' 
+      text: 'Simply paste a GitHub Issue or Pull Request URL into any Obsidian note, and it will be automatically converted to a Markdown link with the resource title.' 
     });
     
     containerEl.createEl('h3', { text: 'Prerequisites' });

@@ -78,8 +78,8 @@ export default class GitHubIssueLinkPlugin extends Plugin {
       return;
     }
 
-    // Check if it's a GitHub issue URL
-    if (!this.githubService.isGitHubIssueUrl(clipboardData)) {
+    // Check if it's a GitHub resource URL (Issue or PR)
+    if (!this.githubService.isGitHubResourceUrl(clipboardData)) {
       return;
     }
 
@@ -122,8 +122,8 @@ export default class GitHubIssueLinkPlugin extends Plugin {
     }
 
     try {
-      // Fetch issue title
-      const title = await this.githubService.fetchIssueTitle(url);
+      // Fetch title from GitHub resource (Issue or PR)
+      const title = await this.githubService.fetchTitle(url);
       
       // Create markdown link
       const markdownLink = `[${title}](${url})`;
