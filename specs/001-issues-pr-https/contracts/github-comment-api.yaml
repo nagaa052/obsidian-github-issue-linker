@@ -1,0 +1,225 @@
+openapi: 3.0.0
+info:
+  title: GitHub Comment API Integration
+  version: 1.0.0
+  description: GitHub REST API v3 endpoints for comment retrieval
+
+servers:
+  - url: https://api.github.com
+    description: GitHub API v3
+
+paths:
+  /repos/{owner}/{repo}/issues/comments/{comment_id}:
+    get:
+      summary: Get an issue/PR comment
+      operationId: getIssueComment
+      parameters:
+        - name: owner
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Repository owner
+        - name: repo
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Repository name
+        - name: comment_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Comment ID
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comment'
+        '404':
+          description: Comment not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Requires authentication
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden or rate limited
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /repos/{owner}/{repo}/pulls/comments/{comment_id}:
+    get:
+      summary: Get a pull request review comment
+      operationId: getPullRequestComment
+      parameters:
+        - name: owner
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Repository owner
+        - name: repo
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Repository name
+        - name: comment_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Comment ID
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PullRequestComment'
+        '404':
+          description: Comment not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Requires authentication
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden or rate limited
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    Comment:
+      type: object
+      required:
+        - id
+        - url
+        - html_url
+        - body
+        - user
+        - created_at
+        - updated_at
+        - issue_url
+      properties:
+        id:
+          type: integer
+          description: Unique comment ID
+        url:
+          type: string
+          format: uri
+          description: API URL
+        html_url:
+          type: string
+          format: uri
+          description: Web URL
+        body:
+          type: string
+          description: Comment body in Markdown
+        user:
+          $ref: '#/components/schemas/User'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        issue_url:
+          type: string
+          format: uri
+          description: Parent issue/PR API URL
+
+    PullRequestComment:
+      allOf:
+        - $ref: '#/components/schemas/Comment'
+        - type: object
+          properties:
+            pull_request_review_id:
+              type: integer
+              nullable: true
+            diff_hunk:
+              type: string
+            path:
+              type: string
+            position:
+              type: integer
+              deprecated: true
+            original_position:
+              type: integer
+            commit_id:
+              type: string
+            original_commit_id:
+              type: string
+            line:
+              type: integer
+              nullable: true
+            original_line:
+              type: integer
+              nullable: true
+            start_line:
+              type: integer
+              nullable: true
+            original_start_line:
+              type: integer
+              nullable: true
+
+    User:
+      type: object
+      required:
+        - login
+        - id
+        - avatar_url
+        - html_url
+      properties:
+        login:
+          type: string
+          description: GitHub username
+        id:
+          type: integer
+        avatar_url:
+          type: string
+          format: uri
+        html_url:
+          type: string
+          format: uri
+          description: User profile URL
+
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+        documentation_url:
+          type: string
+          format: uri
+        status:
+          type: string
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: GitHub Personal Access Token
+
+security:
+  - BearerAuth: []

@@ -13,8 +13,8 @@ main.js
 .DS_Store
 Thumbs.db
 
-# Claude Code internal files
-.claude/
+.claude/discussion_logs/
+.claude/settings.local.json
 
 # npm
 npm-debug.log*
