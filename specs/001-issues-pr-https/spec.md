@@ -5,7 +5,7 @@
 **ステータス**: ドラフト  
 **入力**: ユーザーの説明: "issuesやPRのコメントのリンクが貼られたときもその内容を取得し表示したい
 
-例：https://github.com/abema/dp/issues/2336#issuecomment-3243595867"
+例：https://github.com/abema/sre/issues/2336#issuecomment-3243595867"
 
 ## 実行フロー (main)
 ```
