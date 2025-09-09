@@ -1,5 +1,6 @@
 import { Plugin, Notice, MarkdownView } from 'obsidian';
 import { GitHubService, GitHubError } from './GitHubService';
+import { GitHubCommentError } from './types';
 import { PluginSettings, DEFAULT_SETTINGS, SettingsTab } from './settings';
 import { 
   MESSAGES, 
@@ -122,11 +123,19 @@ export default class GitHubIssueLinkPlugin extends Plugin {
     }
 
     try {
-      // Fetch title from GitHub resource (Issue or PR)
-      const title = await this.githubService.fetchTitle(url);
+      let markdownLink: string;
       
-      // Create markdown link
-      const markdownLink = `[${title}](${url})`;
+      // Check if it's a comment URL or regular Issue/PR URL
+      if (this.githubService.isGitHubCommentUrl(url)) {
+        // Handle comment URLs - fetch comment data and format preview
+        const commentData = await this.githubService.fetchCommentData(url);
+        const commentPreview = this.githubService.formatCommentPreview(commentData);
+        markdownLink = `[${commentPreview}](${url})`;
+      } else {
+        // Handle regular Issue/PR URLs - fetch title
+        const title = await this.githubService.fetchTitle(url);
+        markdownLink = `[${title}](${url})`;
+      }
       
       // Replace the selected text (either selection or the found URL) with the markdown link
       editor.replaceSelection(markdownLink);
@@ -141,7 +150,12 @@ export default class GitHubIssueLinkPlugin extends Plugin {
         new Notice(MESSAGES.FETCH_SUCCESS, NOTIFICATION_DURATION.SUCCESS);
       }
 
-      console.log(`Successfully converted GitHub issue URL to link: ${title}`);
+      // Log success message based on URL type
+      if (this.githubService.isGitHubCommentUrl(url)) {
+        console.log(`Successfully converted GitHub comment URL to link`);
+      } else {
+        console.log(`Successfully converted GitHub issue/PR URL to link`);
+      }
       
     } catch (error) {
       // Hide processing notice
@@ -161,7 +175,7 @@ export default class GitHubIssueLinkPlugin extends Plugin {
       }
       
       // Log the error for debugging
-      if (error instanceof GitHubError) {
+      if (error instanceof GitHubError || error instanceof GitHubCommentError) {
         console.error('GitHub Issue Linker error:', error.message);
       } else {
         console.error('GitHub Issue Linker unexpected error:', error);
@@ -199,12 +213,12 @@ export default class GitHubIssueLinkPlugin extends Plugin {
   getStatus(): { 
     enabled: boolean; 
     pluginEnabled: boolean; 
-    cacheStats: { size: number; maxSize: number } 
+    cacheStats: { size: number; maxSize: number; commentSize: number; hits: number; misses: number } 
   } {
     return {
       enabled: this.settings.enabled,
       pluginEnabled: this.isPluginEnabled,
-      cacheStats: this.githubService?.getCacheStats() || { size: 0, maxSize: 0 }
+      cacheStats: this.githubService?.getCacheStats() || { size: 0, maxSize: 0, commentSize: 0, hits: 0, misses: 0 }
     };
   }
 }
